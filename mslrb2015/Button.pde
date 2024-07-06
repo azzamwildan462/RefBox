@@ -293,6 +293,8 @@ void buttonEvent(char group, int pos) {
 	if(clickedButton != null)        // A button has been clicked
 	{
 		boolean btnOn = buttonFromEnum(clickedButton).isActive();
+
+		// System.out.println("Button " + clickedButton + " is " +btnOn);
 		
 		StateMachine.Update(clickedButton, btnOn);
 		

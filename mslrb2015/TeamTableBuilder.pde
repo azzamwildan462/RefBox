@@ -2,7 +2,7 @@ import processing.data.JSONArray;
 import processing.data.JSONObject;
 
 class TeamTableBuilder {
-	private String teamTableSettingsNames[] = {"UnicastAddr", "MulticastAddr", "Team", "longame24", "shortname8"};
+	private String teamTableSettingsNames[] = {"UnicastAddr", "MulticastAddr", "Team", "longame24", "shortname8", "UDPPort"};
 	private JSONArray teamSettings;
 
 	TeamTableBuilder(String filename) {

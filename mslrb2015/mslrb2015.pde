@@ -292,6 +292,8 @@ void draw() {
 		soundMaxTime.play();
 	}
 
+	AutoRef.update();
+
 	StateMachineCheck(); // Check scheduled state change
 
 
@@ -447,6 +449,7 @@ void initGui()
 	text("Press H for a short help!", 500, 460+60);
 	
 	buttonCSTOPactivate();
+
 }
 
 boolean createDir(String dirPath)

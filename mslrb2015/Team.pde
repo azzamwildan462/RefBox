@@ -1,3 +1,6 @@
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+
 class Team {
 	String shortName;  //max 8 chars
 	String longName;  //max 24 chars
@@ -19,6 +22,19 @@ class Team {
 	PrintWriter logFileOut;
 	Client connectedClient;
 	boolean firstWorldState;
+
+	//*******************************************************************
+	float robot_pose[][] = new float[5][3];
+	float prev_robot_pose[][] = new float[5][3];
+	float robot_vel_global[][] = new float[5][3];
+	float robot_vel_local[][] = new float[5][3];
+	int n_robot_has_ball; 
+	int n_robot_goalkeeper; 
+	int prev_n_robot_has_ball;
+
+	String udp_listen_port;
+	SimpleUDP udp_listener = new SimpleUDP();
+	//*******************************************************************
 	
 	Team(color c, boolean uileftside) {
 		this.colorTeam=c;		//colorTeam;
@@ -113,6 +129,7 @@ class Team {
 		team=teamselect.getString("Team");
 		unicastIP = teamselect.getString("UnicastAddr");
 		multicastIP = teamselect.getString("MulticastAddr");
+		udp_listen_port = teamselect.getString("UDPPort");
 
 		String teamID = isLeft ? "A" : "B";
 
@@ -140,6 +157,13 @@ class Team {
 			try{
 				this.logFileOut = new PrintWriter(new BufferedWriter(new FileWriter(logFile, true)));
 			}catch(IOException e){ }
+		}
+
+		try{
+			this.udp_listener.init(Integer.parseInt(udp_listen_port));
+		}
+		catch(Exception e){
+			System.out.println("Error: " + e);
 		}
 	}
 
@@ -306,6 +330,65 @@ class Team {
 
 	//*******************************************************************
 	void updateUI() {
+
+		if(udp_listener != null)
+		{		
+		try
+			{		
+				byte[] udp_data_buffer = udp_listener.receiveMessageBytes();
+				if(udp_data_buffer != null)
+				{
+					ByteBuffer byteBuffer = ByteBuffer.wrap(udp_data_buffer);
+					byteBuffer.order(ByteOrder.LITTLE_ENDIAN);
+
+					if(byteBuffer.getInt(0) != 0x6D || byteBuffer.getInt(1) != 0x73 || byteBuffer.getInt(2) != 0x6C)
+					{
+						System.out.println("Error: Invalid UDP data received");
+						return;
+					}
+					
+					int offset = 3; 
+
+					n_robot_has_ball = byteBuffer.getInt(offset);
+					offset += 1;
+
+					for(int i = 0; i < 5; i++)
+					{
+						robot_pose[i][0] = byteBuffer.getFloat(offset);
+						offset += 4;
+						robot_pose[i][1]= byteBuffer.getFloat(offset);
+						offset += 4;
+						robot_pose[i][2]= byteBuffer.getFloat(offset);
+						offset += 4;
+					}
+
+					// Calculate the velocity of the robots
+					for(int i = 0; i < 5; i++)
+					{
+						robot_vel_global[i][0] = robot_pose[i][0] - prev_robot_pose[i][0];
+						robot_vel_global[i][1] = robot_pose[i][1] - prev_robot_pose[i][1];
+						robot_vel_global[i][2] = robot_pose[i][2] - prev_robot_pose[i][2];
+
+						// Convert the global velocity to local velocity
+						robot_vel_local[i][0] = (float)(robot_vel_global[i][0] * Math.cos(-robot_pose[i][2]) - robot_vel_global[i][1] * Math.sin(-robot_pose[i][2]));
+						robot_vel_local[i][1] = (float)(robot_vel_global[i][0] * Math.sin(-robot_pose[i][2]) + robot_vel_global[i][1] * Math.cos(-robot_pose[i][2]));
+						robot_vel_local[i][2] = robot_vel_global[i][2];
+					}
+
+					// Copy the previous robot pose
+					System.arraycopy(robot_pose, 0, prev_robot_pose, 0, robot_pose.length);
+
+					prev_n_robot_has_ball = n_robot_has_ball;
+
+					// System.out.println("Received UDP data: " + " " + robot_pose[2][0] + " " + robot_pose[2][1] + " " + robot_pose[2][2] + " " + n_robot_has_ball);
+				}
+			}
+			catch(Exception e)
+			{
+				System.out.println("Error: " + e);
+			}
+		}
+
 		if(connectedClient != null && !connectedClient.active())
 		{
 			println("Connection to team \"" + longName + "\" dropped.");
@@ -371,5 +454,11 @@ class Team {
 		}
 
 		return this.unicastIP.equals(clientipstr);
+	}
+
+	//*******************************************************************
+	void setTeamsData(float[][] robot_pose, int n_robot_has_ball) {
+		this.robot_pose = robot_pose;
+		this.n_robot_has_ball = n_robot_has_ball;
 	}
 }
