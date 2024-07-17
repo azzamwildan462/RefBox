@@ -1,12 +1,12 @@
 
 /**
 * Based on https://msl.robocup.org/wp-content/uploads/2024/05/Rulebook_MSL2024_v25.1.pdf
-
+*
 * Requirements: 
 * - All teams must have a standard unit for pose 
 * - All teams must have a standard localization of their robots 
-* - All teams must have a standard world coordinate system
-* - All teams must have a standard for numberings of their robots
+* - All teams must have a standard world coordinate system 
+* - All teams must have a standard rule for numberings their robots 
 */
 
 static class AutoRef {
@@ -78,11 +78,24 @@ static class AutoRef {
    private static int team_that_violated = 0;
    private static int prev_team_that_violated = 0;
 
+   private static float pos_counter_x_backward = 0; 
+   private static float pos_counter_y_backward = 0;
+
    /**
    * Update the max distance for dribbling motion
    */
    private static void update_max_dribbling(Team current_team){
       fsm_max_dribbling_used = current_team.isLeft ? fsm_max_dribbling_a : fsm_max_dribbling_b;
+
+      if(current_team.n_robot_has_ball > 0){
+         cprintf("%.2f %.2f || %.2f %.2f\n",pos_x_start_backward_motion, pos_y_start_backward_motion,pos_counter_x_backward,pos_counter_y_backward);
+      }
+
+      // Always reset state machine to 0, if game stopped
+      if(StateMachine.GetCurrentGameButton() == ButtonsEnum.BTN_STOP || 
+      StateMachine.GetCurrentGameButton() == ButtonsEnum.BTN_ILLEGAL){
+         fsm_max_dribbling_used = 0;
+      }
 
       switch (fsm_max_dribbling_used){
          case 0: 
@@ -92,75 +105,89 @@ static class AutoRef {
          break;
 
          case 1: 
-            if(current_team.n_robot_has_ball == 0 || current_team.n_robot_has_ball != current_team.prev_n_robot_has_ball){
+            if(current_team.n_robot_has_ball == 0){
                fsm_max_dribbling_used = 0;
+               break;
             }
 
-            // If robot start backward motion
-            if(Math.abs(current_team.robot_vel_local[current_team.n_robot_has_ball - 1][1]) > 
-            Math.abs(current_team.robot_vel_local[current_team.n_robot_has_ball - 1][0]) * 0.2){
-               if(current_team.robot_vel_local[current_team.n_robot_has_ball - 1][1] < -0.1){
-                  pos_x_start_backward_motion = current_team.robot_pose[current_team.n_robot_has_ball - 1][0];
-                  pos_y_start_backward_motion = current_team.robot_pose[current_team.n_robot_has_ball - 1][1];
-                  fsm_max_dribbling_used = 2;
-               }
-               else {
-                  pos_x_start_dribbling = current_team.robot_pose[current_team.n_robot_has_ball - 1][0];
-                  pos_y_start_dribbling = current_team.robot_pose[current_team.n_robot_has_ball - 1][1];
-                  fsm_max_dribbling_used = 2;
-               }
-            }
-            else {
-               pos_x_start_dribbling = current_team.robot_pose[current_team.n_robot_has_ball - 1][0];
-               pos_y_start_dribbling = current_team.robot_pose[current_team.n_robot_has_ball - 1][1];
-               fsm_max_dribbling_used = 2;
-            }
+            pos_x_start_dribbling = current_team.robot_pose[current_team.n_robot_has_ball - 1][0];
+            pos_y_start_dribbling = current_team.robot_pose[current_team.n_robot_has_ball - 1][1];
+            pos_x_start_backward_motion = current_team.robot_pose[current_team.n_robot_has_ball - 1][0];
+            pos_y_start_backward_motion = current_team.robot_pose[current_team.n_robot_has_ball - 1][1];
+            fsm_max_dribbling_used = 2;
+
+            pos_counter_x_backward = pos_x_start_backward_motion;
+            pos_counter_y_backward = pos_y_start_backward_motion;
+            
 
          break;
 
          case 2: 
-            if(current_team.n_robot_has_ball == 0 || current_team.n_robot_has_ball != current_team.prev_n_robot_has_ball){
+            if(current_team.n_robot_has_ball == 0){
                fsm_max_dribbling_used = 0;
+               break;
             }
 
             // If robot start backward motion
             if(Math.abs(current_team.robot_vel_local[current_team.n_robot_has_ball - 1][1]) > 
-            Math.abs(current_team.robot_vel_local[current_team.n_robot_has_ball - 1][0]) * 0.2){
-               if(current_team.robot_vel_local[current_team.n_robot_has_ball - 1][1] < -0.1){
+            Math.abs(current_team.robot_vel_local[current_team.n_robot_has_ball - 1][0]) * 0.002){
+               if(current_team.robot_vel_local[current_team.n_robot_has_ball - 1][1] < -0.0001){
                   if(pythagoras(pos_x_start_backward_motion, pos_y_start_backward_motion, current_team.robot_pose[current_team.n_robot_has_ball - 1][0], current_team.robot_pose[current_team.n_robot_has_ball - 1][1]) >= 2){
-                     team_that_violated = current_team.isLeft ? 1 : 2;
-                     StateMachine.Update(ButtonsEnum.BTN_STOP, false);
-                     time_start_violation = my_millis;
-                     Log.screenlog("Ballhandling Foul on " + (current_team.isLeft ? "CYAN" : "MAGENTA") + ", Game Stopped!");
-                     fsm_max_dribbling_used = 0;
+                     // team_that_violated = current_team.isLeft ? 1 : 2;
+                     // StateMachine.Update(ButtonsEnum.BTN_STOP, false);
+                     // send_event_v2(COMM_STOP, COMM_STOP, null,-1);
+                     // time_start_violation = my_millis;
+                     // Log.screenlog("Ballhandling Foul on " + (current_team.isLeft ? "CYAN" : "MAGENTA"));
+                     // fsm_max_dribbling_used = 0;
+
+                     // log2stdout("HELLOOOOOOO");
+
+                     pos_counter_x_backward += (float)(current_team.robot_vel_local[current_team.n_robot_has_ball - 1][0] / 40);
+                     pos_counter_y_backward += (float)(current_team.robot_vel_local[current_team.n_robot_has_ball - 1][1] / 40);
                   }
                }
                else {
-                  pos_x_start_backward_motion = current_team.robot_pose[current_team.n_robot_has_ball - 1][0];
-                  pos_y_start_backward_motion = current_team.robot_pose[current_team.n_robot_has_ball - 1][1];
-
+                  // pos_x_start_backward_motion = current_team.robot_pose[current_team.n_robot_has_ball - 1][0];
+                  // pos_y_start_backward_motion = current_team.robot_pose[current_team.n_robot_has_ball - 1][1];
                   if(pythagoras(pos_x_start_dribbling, pos_y_start_dribbling, current_team.robot_pose[current_team.n_robot_has_ball - 1][0], current_team.robot_pose[current_team.n_robot_has_ball - 1][1]) >= 3){
                      team_that_violated = current_team.isLeft ? 1 : 2;
                      StateMachine.Update(ButtonsEnum.BTN_STOP, false);
+                     send_event_v2(COMM_STOP, COMM_STOP, null,-1);
                      time_start_violation = my_millis;
-                     Log.screenlog("Ballhandling Foul on " + (current_team.isLeft ? "CYAN" : "MAGENTA") + ", Game Stopped!");
+                     Log.screenlog("Ballhandling Foul on " + (current_team.isLeft ? "CYAN" : "MAGENTA"));
                      fsm_max_dribbling_used = 0;
                   }
                }
             }else {
-               pos_x_start_backward_motion = current_team.robot_pose[current_team.n_robot_has_ball - 1][0];
-               pos_y_start_backward_motion = current_team.robot_pose[current_team.n_robot_has_ball - 1][1];
-
+               // pos_x_start_backward_motion = current_team.robot_pose[current_team.n_robot_has_ball - 1][0];
+               // pos_y_start_backward_motion = current_team.robot_pose[current_team.n_robot_has_ball - 1][1];
                if(pythagoras(pos_x_start_dribbling, pos_y_start_dribbling, current_team.robot_pose[current_team.n_robot_has_ball - 1][0], current_team.robot_pose[current_team.n_robot_has_ball - 1][1]) >= 3){
                   team_that_violated = current_team.isLeft ? 1 : 2;
                   StateMachine.Update(ButtonsEnum.BTN_STOP, false);
+                  send_event_v2(COMM_STOP, COMM_STOP, null,-1);
                   time_start_violation = my_millis;
-                  Log.screenlog("Ballhandling Foul on " + (current_team.isLeft ? "CYAN" : "MAGENTA") + ", Game Stopped!");
+                  Log.screenlog("Ballhandling Foul on " + (current_team.isLeft ? "CYAN" : "MAGENTA"));
                   fsm_max_dribbling_used = 0;
                }
             }
 
+            // if(pythagoras(pos_x_start_dribbling, pos_y_start_dribbling, current_team.robot_pose[current_team.n_robot_has_ball - 1][0], current_team.robot_pose[current_team.n_robot_has_ball - 1][1]) >= 3){
+            //    team_that_violated = current_team.isLeft ? 1 : 2;
+            //    StateMachine.Update(ButtonsEnum.BTN_STOP, false);
+            //    send_event_v2(COMM_STOP, COMM_STOP, null,-1);
+            //    time_start_violation = my_millis;
+            //    Log.screenlog("Ballhandling Foul on " + (current_team.isLeft ? "CYAN" : "MAGENTA"));
+            //    fsm_max_dribbling_used = 0;
+            // }
+
          break;
+      }
+
+      if(current_team.isLeft){
+         fsm_max_dribbling_a = fsm_max_dribbling_used;
+      }
+      else{
+         fsm_max_dribbling_b = fsm_max_dribbling_used;
       }
    };
 
@@ -169,6 +196,12 @@ static class AutoRef {
 
       int counter_suspected_robot = 0;
       int n_robot_suspected = 0;
+
+      // Always reset state machine to 0, if game stopped
+      if(StateMachine.GetCurrentGameButton() == ButtonsEnum.BTN_STOP || 
+      StateMachine.GetCurrentGameButton() == ButtonsEnum.BTN_ILLEGAL){
+         fsm_illegal_attack_used = 0;
+      }
 
       switch (fsm_illegal_attack_used) {
          case 0: 
@@ -192,8 +225,9 @@ static class AutoRef {
          if(counter_suspected_robot > 1){
             team_that_violated = current_team.isLeft ? 1 : 2;
             StateMachine.Update(ButtonsEnum.BTN_STOP, false);
+            send_event_v2(COMM_STOP, COMM_STOP, null,-1);
             time_start_violation = my_millis;
-            Log.screenlog("Illegal Attack on " + (current_team.isLeft ? "CYAN" : "MAGENTA") + ", Game Stopped!");
+            Log.screenlog("Illegal Attack on " + (current_team.isLeft ? "CYAN" : "MAGENTA"));
          }
          else if(counter_suspected_robot == 1){
             time_start_illegal_attack = my_millis;
@@ -225,8 +259,9 @@ static class AutoRef {
             fsm_illegal_attack_used = 0;
             team_that_violated = current_team.isLeft ? 1 : 2;
             StateMachine.Update(ButtonsEnum.BTN_STOP, false);
+            send_event_v2(COMM_STOP, COMM_STOP, null,-1);
             time_start_violation = my_millis;
-            Log.screenlog("Illegal Attack on " + (current_team.isLeft ? "CYAN" : "MAGENTA") + ", Game Stopped!");
+            Log.screenlog("Illegal Attack on " + (current_team.isLeft ? "CYAN" : "MAGENTA"));
             break;
          }
 
@@ -243,8 +278,9 @@ static class AutoRef {
             fsm_illegal_attack_used = 0;
             team_that_violated = current_team.isLeft ? 1 : 2;
             StateMachine.Update(ButtonsEnum.BTN_STOP, false);
+            send_event_v2(COMM_STOP, COMM_STOP, null,-1);
             time_start_violation = my_millis;
-            Log.screenlog("Illegal Attack on " + (current_team.isLeft ? "CYAN" : "MAGENTA") + ", Game Stopped!");
+            Log.screenlog("Illegal Attack on " + (current_team.isLeft ? "CYAN" : "MAGENTA"));
             break;
          }
 
@@ -266,6 +302,12 @@ static class AutoRef {
 
       int counter_suspected_robot = 0;
       int n_robot_suspected = 0;
+
+      // Always reset state machine to 0, if game stopped
+      if(StateMachine.GetCurrentGameButton() == ButtonsEnum.BTN_STOP || 
+      StateMachine.GetCurrentGameButton() == ButtonsEnum.BTN_ILLEGAL){
+         fsm_illegal_defend_used = 0;
+      }
 
       switch (fsm_illegal_defend_used) {
          case 0: 
@@ -289,8 +331,9 @@ static class AutoRef {
          if(counter_suspected_robot > 1){
             team_that_violated = current_team.isLeft ? 1 : 2;
             StateMachine.Update(ButtonsEnum.BTN_STOP, false);
+            send_event_v2(COMM_STOP, COMM_STOP, null,-1);
             time_start_violation = my_millis;
-            Log.screenlog("Illegal Defend on " + (current_team.isLeft ? "CYAN" : "MAGENTA") + ", Game Stopped!");
+            Log.screenlog("Illegal Defend on " + (current_team.isLeft ? "CYAN" : "MAGENTA"));
          }
          else if(counter_suspected_robot == 1){
             time_start_illegal_defend = my_millis;
@@ -320,8 +363,9 @@ static class AutoRef {
             fsm_illegal_defend_used = 0;
             team_that_violated = current_team.isLeft ? 1 : 2;
             StateMachine.Update(ButtonsEnum.BTN_STOP, false);
+            send_event_v2(COMM_STOP, COMM_STOP, null,-1);
             time_start_violation = my_millis;
-            Log.screenlog("Illegal Defend on " + (current_team.isLeft ? "CYAN" : "MAGENTA") + ", Game Stopped!");
+            Log.screenlog("Illegal Defend on " + (current_team.isLeft ? "CYAN" : "MAGENTA"));
             break;
          }
 
@@ -338,8 +382,9 @@ static class AutoRef {
             fsm_illegal_defend_used = 0;
             team_that_violated = current_team.isLeft ? 1 : 2;
             StateMachine.Update(ButtonsEnum.BTN_STOP, false);
+            send_event_v2(COMM_STOP, COMM_STOP, null,-1);
             time_start_violation = my_millis;
-            Log.screenlog("Illegal Defend on " + (current_team.isLeft ? "CYAN" : "MAGENTA") + ", Game Stopped!");
+            Log.screenlog("Illegal Defend on " + (current_team.isLeft ? "CYAN" : "MAGENTA"));
             break;
          }
 
@@ -367,7 +412,6 @@ static class AutoRef {
       update_illegal_defend(teamA);
       update_illegal_defend(teamB);
 
-
       // System.out.println(StateMachine.setpiece_button);
 
       // if(team_that_violated > 0){
@@ -391,7 +435,6 @@ static class AutoRef {
    };
 
 
-
    private static void set_suspect_robot_num(int num){
       // Safety
       if(num == 0)
@@ -402,7 +445,7 @@ static class AutoRef {
       n_robot_suspected_bin &= ~(1 << (num));
       n_robot_suspected_bin |= (1 << (num)); 
 
-      System.out.println("SET SUS ON: " + (num +1) + " -> " + n_robot_suspected_bin);
+      // System.out.println("SET SUS ON: " + (num +1) + " -> " + n_robot_suspected_bin);
    };
 
    private static int five_bit_to_num(int n){
@@ -420,6 +463,15 @@ static class AutoRef {
    private static double pythagoras(float x1, float y1, float x2, float y2){
       return Math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
    };
+
+   private static void log2stdout(String str){
+      System.out.println(str);
+      return;
+   }
+
+   private static void cprintf(String format, Object... args) {
+      System.out.printf(format, args);
+   }
 
 };
 

@@ -17,6 +17,10 @@ static class StateMachine
 
 	public static boolean validInput = true;
 
+	public static ButtonsEnum GetCurrentGameButton(){
+		return btnCurrent;
+	}
+
 	public static void Update(ButtonsEnum click_btn, boolean on) //If on==True then active
 	{
 		btnCurrent = click_btn;
